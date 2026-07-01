@@ -15,27 +15,42 @@ jobs:
         run: |
           shopt -s dotglob
           if ls *.zip 1> /dev/null 2>&1; then
-            echo "📦 تم العثور على ملف مضغوط، جاري استخراج المحتويات وترتيبها..."
-            unzip -q *.zip -d temp_extracted
-            if [ $(ls -1 temp_extracted | wc -l) -eq 1 ] && [ -d temp_extracted/* ]; then
-              mv temp_extracted/*/* . 2>/dev/null || true
-            else
-              mv temp_extracted/* . 2>/dev/null || true
-            fi
-            rm -rf temp_extracted *.zip
+            echo "📦 تم العثور على ملف مضغوط، جاري استخراجه..."
+            unzip -q *.zip -d extracted_project
+            rm -rf *.zip
           fi
+
+      - name: Locate Project Root and Flatten
+        run: |
+          # البحث الديناميكي عن المجلد الفعلي الذي يحتوي على ملفات بناء الأندرويد لضمان عدم ضياع المسارات
+          if [ -d "extracted_project" ]; then
+            build_file=$(find extracted_project -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
+            if [ ! -z "$build_file" ]; then
+              project_dir=$(dirname "$build_file")
+              echo "📌 تم العثور على جذر المشروع في: $project_dir"
+              cp -r $project_dir/* .
+              rm -rf extracted_project
+            fi
+          fi
+
+      - name: Force Upgrade Gradle Wrapper Properties
+        run: |
+          echo "🔄 جاري كتابة وإجبار السيرفر على استخدام إصدار Gradle 8.7 متوافق حتماً..."
+          mkdir -p gradle/wrapper
+          cat << EOF > gradle/wrapper/gradle-wrapper.properties
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+          chmod +x gradlew || true
 
       - name: Fix Missing Environment Files
         run: |
-          echo "📝 إنشاء ملفات البيئة الناقصة لمنع انهيار الـ Gradle..."
+          echo "📝 إنشاء ملفات البيئة الافتراضية الناقصة لمنع توقف المحرك..."
           touch .env
           touch .env.example
-
-          # إزالة أي إعدادات صارمة قد تعيق البناء من الهاتف
-          if [ -f gradle.properties ]; then
-            sed -i '/org.gradle.parallel/d' gradle.properties
-            sed -i '/org.gradle.configureondemand/d' gradle.properties
-          fi
 
       - name: Auto-Fix Google Services Package Mismatch
         run: |
@@ -62,7 +77,7 @@ jobs:
                           data['client'] = dummy_json['client']
                       with open(p, 'w') as f:
                           json.dump(data, f, indent=4)
-                      print(f'✅ تم إصلاح وتطابق حزمة خدمات جوجل في: {p}')
+                      print(f'✅ تم تطابق وإصلاح حزمة خدمات جوجل في: {p}')
                       fixed = True
                   except Exception as e:
                       with open(p, 'w') as f: json.dump(dummy_json, f, indent=4)
@@ -71,16 +86,7 @@ jobs:
               out = 'app/google-services.json' if os.path.exists('app') else 'google-services.json'
               os.makedirs(os.path.dirname(out) if os.path.dirname(out) else '.', exist_ok=True)
               with open(out, 'w') as f: json.dump(dummy_json, f, indent=4)
-              print(f'➕ تم إنشاء ملف هدمي متوافق لخدمات جوجل في: {out}')
           "
-
-      - name: Wipe and Regenerate Gradle Wrapper
-        run: |
-          echo "🔄 تنظيف وإعادة بناء ملفات الـ Wrapper التالفة بالكامل..."
-          rm -f gradlew gradlew.bat
-          rm -rf gradle/wrapper
-          gradle wrapper --gradle-version 8.5
-          chmod +x gradlew
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -91,6 +97,7 @@ jobs:
 
       - name: Build Android APK (Debug)
         run: |
+          chmod +x gradlew
           ./gradlew clean assembleDebug --stacktrace
 
       - name: Upload Repaired APK
@@ -98,4 +105,3 @@ jobs:
         with:
           name: App-Repaired-APK
           path: '**/build/outputs/apk/debug/*.apk'
-
