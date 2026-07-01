@@ -22,7 +22,6 @@ jobs:
 
       - name: Locate Project Root and Flatten
         run: |
-          # البحث الديناميكي عن المجلد الفعلي الذي يحتوي على ملفات بناء الأندرويد لضمان عدم ضياع المسارات
           if [ -d "extracted_project" ]; then
             build_file=$(find extracted_project -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
             if [ ! -z "$build_file" ]; then
@@ -33,10 +32,15 @@ jobs:
             fi
           fi
 
-      - name: Force Upgrade Gradle Wrapper Properties
+      - name: Purge and Download Clean Official Gradle Wrapper
         run: |
-          echo "🔄 جاري كتابة وإجبار السيرفر على استخدام إصدار Gradle 8.7 متوافق حتماً..."
+          echo "🔄 جاري تنظيف وإزالة الملفات التالفة وتحميل مغلّف Gradle رسمي وسليم..."
+          # مسح الملفات القديمة التالفة تماماً
+          rm -f gradlew gradlew.bat
+          rm -rf gradle/wrapper
           mkdir -p gradle/wrapper
+
+          # 1. كتابة ملف الخصائص لإصدار 8.7 المتوافق حتماً
           cat << EOF > gradle/wrapper/gradle-wrapper.properties
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -44,7 +48,13 @@ jobs:
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
-          chmod +x gradlew || true
+
+          # 2. تحميل ملف الـ jar الأصلي النظيف مباشرة من مستودعات Gradle الرسمية لتفادي التلف
+          curl -Lo gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar
+          
+          # 3. تحميل ملف تشغيل السيرفر الأساسي
+          curl -Lo gradlew https://github.com/gradle/gradle/raw/v8.7.0/gradlew
+          chmod +x gradlew
 
       - name: Fix Missing Environment Files
         run: |
@@ -97,7 +107,6 @@ jobs:
 
       - name: Build Android APK (Debug)
         run: |
-          chmod +x gradlew
           ./gradlew clean assembleDebug --stacktrace
 
       - name: Upload Repaired APK
@@ -105,3 +114,4 @@ jobs:
         with:
           name: App-Repaired-APK
           path: '**/build/outputs/apk/debug/*.apk'
+
