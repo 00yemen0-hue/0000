@@ -1,0 +1,101 @@
+name: Ultimate Android Build and Repair
+on:
+  push:
+    branches: [ "main", "رئيسي" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Extract Project Zip If Exists
+        run: |
+          shopt -s dotglob
+          if ls *.zip 1> /dev/null 2>&1; then
+            echo "📦 تم العثور على ملف مضغوط، جاري استخراج المحتويات وترتيبها..."
+            unzip -q *.zip -d temp_extracted
+            if [ $(ls -1 temp_extracted | wc -l) -eq 1 ] && [ -d temp_extracted/* ]; then
+              mv temp_extracted/*/* . 2>/dev/null || true
+            else
+              mv temp_extracted/* . 2>/dev/null || true
+            fi
+            rm -rf temp_extracted *.zip
+          fi
+
+      - name: Fix Missing Environment Files
+        run: |
+          echo "📝 إنشاء ملفات البيئة الناقصة لمنع انهيار الـ Gradle..."
+          touch .env
+          touch .env.example
+
+          # إزالة أي إعدادات صارمة قد تعيق البناء من الهاتف
+          if [ -f gradle.properties ]; then
+            sed -i '/org.gradle.parallel/d' gradle.properties
+            sed -i '/org.gradle.configureondemand/d' gradle.properties
+          fi
+
+      - name: Auto-Fix Google Services Package Mismatch
+        run: |
+          python3 -c "
+          import json, os
+          target_pkg = 'com.aistudio.maranchat.hrzpqm'
+          dummy_json = {
+              'project_info': {'project_number': '123456789', 'project_id': 'dummy-id', 'storage_bucket': 'dummy.appspot.com'},
+              'client': [{'client_info': {'mobilesdk_app_id': '1:123:android:123', 'android_client_info': {'package_name': target_pkg}}, 'api_key': [{'current_key': 'dummy_key'}], 'services': {}}]
+          }
+          paths = ['app/google-services.json', 'google-services.json']
+          fixed = False
+          for p in paths:
+              if os.path.exists(p):
+                  try:
+                      with open(p, 'r') as f:
+                          data = json.load(f)
+                      if 'project_info' not in data: data['project_info'] = dummy_json['project_info']
+                      if 'client' in data and len(data['client']) > 0:
+                          for c in data['client']:
+                              if 'client_info' in c and 'android_client_info' in c['client_info']:
+                                  c['client_info']['android_client_info']['package_name'] = target_pkg
+                      else:
+                          data['client'] = dummy_json['client']
+                      with open(p, 'w') as f:
+                          json.dump(data, f, indent=4)
+                      print(f'✅ تم إصلاح وتطابق حزمة خدمات جوجل في: {p}')
+                      fixed = True
+                  except Exception as e:
+                      with open(p, 'w') as f: json.dump(dummy_json, f, indent=4)
+                      fixed = True
+          if not fixed:
+              out = 'app/google-services.json' if os.path.exists('app') else 'google-services.json'
+              os.makedirs(os.path.dirname(out) if os.path.dirname(out) else '.', exist_ok=True)
+              with open(out, 'w') as f: json.dump(dummy_json, f, indent=4)
+              print(f'➕ تم إنشاء ملف هدمي متوافق لخدمات جوجل في: {out}')
+          "
+
+      - name: Wipe and Regenerate Gradle Wrapper
+        run: |
+          echo "🔄 تنظيف وإعادة بناء ملفات الـ Wrapper التالفة بالكامل..."
+          rm -f gradlew gradlew.bat
+          rm -rf gradle/wrapper
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build Android APK (Debug)
+        run: |
+          ./gradlew clean assembleDebug --stacktrace
+
+      - name: Upload Repaired APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: App-Repaired-APK
+          path: '**/build/outputs/apk/debug/*.apk'
+
