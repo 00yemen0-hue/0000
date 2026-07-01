@@ -32,28 +32,28 @@ jobs:
             fi
           fi
 
-      - name: Purge and Download Clean Official Gradle Wrapper
+      - name: Purge and Download Clean Official Gradle Wrapper 9.3.1
         run: |
-          echo "🔄 جاري تنظيف وإزالة الملفات التالفة وتحميل مغلّف Gradle رسمي وسليم..."
-          # مسح الملفات القديمة التالفة تماماً
+          echo "🔄 جاري ترقية ملفات التشغيل إلى إصدار 9.3.1 المطلوب حتماً..."
+          # تنظيف أي مخلفات قديمة تالفة
           rm -f gradlew gradlew.bat
           rm -rf gradle/wrapper
           mkdir -p gradle/wrapper
 
-          # 1. كتابة ملف الخصائص لإصدار 8.7 المتوافق حتماً
+          # 1. كتابة ملف الخصائص لإجبار السيرفر على الإصدار الحديث 9.3.1
           cat << EOF > gradle/wrapper/gradle-wrapper.properties
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
+          distributionUrl=https\://services.gradle.org/distributions/gradle-9.3.1-bin.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
 
-          # 2. تحميل ملف الـ jar الأصلي النظيف مباشرة من مستودعات Gradle الرسمية لتفادي التلف
-          curl -Lo gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar
+          # 2. تحميل ملف الـ jar النظيف والمطابق للإصدار 9.3.1 من مستودع Gradle الرسمي
+          curl -Lo gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v9.3.1/gradle/wrapper/gradle-wrapper.jar
           
-          # 3. تحميل ملف تشغيل السيرفر الأساسي
-          curl -Lo gradlew https://github.com/gradle/gradle/raw/v8.7.0/gradlew
+          # 3. تحميل ملف تشغيل الـ wrapper الأساسي المتوافق
+          curl -Lo gradlew https://github.com/gradle/gradle/raw/v9.3.1/gradlew
           chmod +x gradlew
 
       - name: Fix Missing Environment Files
