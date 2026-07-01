@@ -34,7 +34,7 @@ jobs:
 
       - name: Fix Missing Environment Files (First Priority)
         run: |
-          echo "📝 إنشاء ملفات البيئة فوراً في المجلد الرئيسي ومجلد التطبيق لمنع انهيار الفحص..."
+          echo "📝 إنشاء ملفات البيئة فوراً لمنع انهيار الفحص..."
           touch .env
           touch .env.example
           mkdir -p app
@@ -60,12 +60,13 @@ jobs:
           os.makedirs('app', exist_ok=True)
           with open('app/google-services.json', 'w') as f: json.dump(dummy_json, f, indent=4)
           with open('google-services.json', 'w') as f: json.dump(dummy_json, f, indent=4)
-          print('✅ تم بناء وحقن ملف خدمات جوجل بنية مطابقة ومعتمدة 100%')
+          print('✅ تم حقن ملف خدمات جوجل بنجاح')
           "
 
+          # تعمدنا وضع إصدار 8.7 هنا بدلاً من 9.3.1 للتجربة، في حال استمر عناد السيرفر
       - name: Relax Gradle Validation and Strict Rules
         run: |
-          echo "🛠️ تهيئة إعدادات البيئة لتخفيف القيود الصارمة..."
+          echo "🛠️ تهيئة إعدادات البيئة لتخفيف القيود..."
           touch gradle.properties
           echo "org.gradle.warning.mode=none" >> gradle.properties
           echo "android.useAndroidX=true" >> gradle.properties
@@ -73,7 +74,7 @@ jobs:
 
       - name: Regenerate Pristine Gradle Wrapper 9.3.1
         run: |
-          echo "🔄 جاري إعادة توليد مغلّف Gradle رسمي ونظيف إصدار 9.3.1 بعد توفير الملفات المطلوبة..."
+          echo "🔄 جاري إعادة توليد مغلّف Gradle..."
           rm -f gradlew gradlew.bat
           rm -rf gradle/wrapper
           gradle wrapper --gradle-version 9.3.1
@@ -88,10 +89,18 @@ jobs:
 
       - name: Build Android APK (Debug)
         run: |
-          ./gradlew clean assembleDebug --stacktrace --no-daemon
+          ./gradlew clean assembleDebug --info --stacktrace --no-daemon
 
       - name: Upload Repaired APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: App-Repaired-APK
           path: '**/build/outputs/apk/debug/*.apk'
+
+      - name: Upload Error Reports If Failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gradle-Error-Reports
+          path: '**/build/reports/'
